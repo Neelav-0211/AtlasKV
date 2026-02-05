@@ -1,0 +1,78 @@
+[package]
+name = "atlaskv"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <you@example.com>"]
+description = "A high-performance, distributed key-value store with WAL, crash recovery, and TCP client support"
+license = "MIT"
+readme = "README.md"
+keywords = ["kv-store", "database", "distributed", "wal", "storage"]
+categories = ["database", "data-structures"]
+
+[lib]
+name = "atlaskv"
+path = "src/lib.rs"
+
+[[bin]]
+name = "atlaskv-server"
+path = "src/bin/server.rs"
+
+[[bin]]
+name = "atlaskv-cli"
+path = "src/bin/cli.rs"
+
+[dependencies]
+# Serialization - bincode for compact binary format
+# Docs: https://docs.rs/bincode
+bincode = "1.3"
+
+# Serde for serialization framework
+# Docs: https://docs.rs/serde
+serde = { version = "1.0", features = ["derive"] }
+
+# CRC32 for checksums (fast, good for data integrity)
+# Docs: https://docs.rs/crc32fast
+crc32fast = "1.4"
+
+# Parking lot for faster RwLock/Mutex
+# Docs: https://docs.rs/parking_lot
+parking_lot = "0.12"
+
+# Crossbeam for concurrent data structures and channels
+# Docs: https://docs.rs/crossbeam
+crossbeam = "0.8"
+
+# Bytes for efficient byte buffer handling
+# Docs: https://docs.rs/bytes
+bytes = "1.5"
+
+# Thiserror for ergonomic error definitions
+# Docs: https://docs.rs/thiserror
+thiserror = "1.0"
+
+# Tracing for structured logging
+# Docs: https://docs.rs/tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Clap for CLI argument parsing
+# Docs: https://docs.rs/clap
+clap = { version = "4.4", features = ["derive"] }
+
+[dev-dependencies]
+# Tempfile for test directories
+# Docs: https://docs.rs/tempfile
+tempfile = "3.10"
+
+# Criterion for benchmarks
+# Docs: https://docs.rs/criterion
+criterion = "0.5"
+
+[[bench]]
+name = "storage_bench"
+harness = false
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3
