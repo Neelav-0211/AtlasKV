@@ -50,11 +50,8 @@ pub enum WalSyncStrategy {
     /// fsync after every write (safest, slowest)
     EveryWrite,
 
-    /// fsync at interval (balance)
-    Interval { ms: u64 },
-
-    /// Let OS decide (fastest, least safe)
-    OsDefault,
+    /// fsync after N uncommitted entries (balanced durability/performance)
+    EveryNEntries { count: usize },
 }
 
 impl Default for Config {
@@ -62,7 +59,7 @@ impl Default for Config {
         Self {
             data_dir: PathBuf::from("./atlaskv_data"),
             wal_path: PathBuf::from("wal.log"),
-            wal_sync_strategy: WalSyncStrategy::Interval { ms: 100 },
+            wal_sync_strategy: WalSyncStrategy::EveryNEntries { count: 100 },
             memtable_size_limit: 64 * 1024 * 1024, // 64 MB
             listen_addr: "127.0.0.1:6379".to_string(),
             max_connections: 1024,

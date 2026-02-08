@@ -86,6 +86,99 @@ output[8..12].copy_from_slice(&crc.to_le_bytes());
 
 ---
 
+### 3. Time-Based + Background Worker Sync Strategy
+**Status:** 🔖 TBD (To Be Decided)
+
+**Current State:**
+- V1 uses count-based batching: `EveryNEntries { count: usize }`
+- Sync happens synchronously in `append()` call
+- Simple, predictable, no threading complexity
+
+**Proposal:**
+Add optional time-based sync with background worker thread:
+
+```rust
+pub enum WalSyncStrategy {
+    EveryWrite,
+    EveryNEntries { count: usize },
+    
+    // New options:
+    TimeBasedBackground { interval_ms: u64 },  // Background thread syncs every N ms
+    Hybrid { count: usize, max_delay_ms: u64 }, // Sync on count OR timeout (whichever first)
+}
+```
+
+**Implementation Approaches:**
+
+**Option A: Dedicated Sync Thread (PostgreSQL Style)**
+```rust
+pub struct WalWriter {
+    file: Arc<Mutex<BufWriter<File>>>,
+    sync_thread: Option<JoinHandle<()>>,
+}
+
+// Background thread
+thread::spawn(move || {
+    loop {
+        thread::sleep(Duration::from_millis(interval));
+        writer_lock.lock().unwrap().sync().ok();
+    }
+});
+```
+
+**Option B: Channel-Based Signaling**
+```rust
+pub struct WalWriter {
+    file: BufWriter<File>,
+    sync_signal: Receiver<()>,
+}
+
+// Background thread sends wake-up signals
+// Main thread checks signal in append(), syncs if triggered
+```
+
+**Option C: Tokio Async (Advanced)**
+```rust
+// Async WAL writer with background flush task
+tokio::spawn(async move {
+    let mut interval = tokio::time::interval(Duration::from_millis(100));
+    loop {
+        interval.tick().await;
+        writer.sync().await?;
+    }
+});
+```
+
+**Benefits:**
+- Writes never block on fsync (better latency)
+- More predictable sync timing
+- Can achieve PostgreSQL-like behavior
+- Matches MongoDB WiredTiger's group commit pattern
+
+**Trade-offs:**
+- Threading complexity (mutex/channels)
+- Potential data loss window if crash before background sync
+- Harder to test and debug
+- Mutex overhead on every write (Option A)
+
+**Decision Criteria:**
+- Benchmark latency improvement (blocking vs. background sync)
+- Evaluate complexity vs. benefit
+- Consider if users want this control
+- Check if Engine layer should handle this instead
+
+**Estimated Impact:**
+- 10-30% reduction in write latency (no blocking on fsync)
+- Slightly worse durability (delayed sync)
+- Good for write-heavy workloads with acceptable data loss window
+
+**Recommendation:**
+- V1: Keep simple count-based sync
+- V2: Add time-based background sync as opt-in feature
+- Let Engine layer handle periodic sync for maximum flexibility
+
+---
+
 ## Evaluation Process
 
 1. **Implement benchmarks** for WAL write operations
