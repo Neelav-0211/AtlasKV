@@ -18,8 +18,8 @@ pub struct WalReader {
 
 impl WalReader {
     /// Open a WAL file for reading
-    pub fn open(_path: &Path) -> Result<Self> {
-        let file = File::open(_path)?;
+    pub fn open(path: &Path) -> Result<Self> {
+        let file = File::open(path)?;
         let file_size = file.metadata()?.len();
         
         Ok(Self {

@@ -19,7 +19,7 @@ mod table;
 pub use table::MemTable;
 
 /// Entry stored in the MemTable
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum MemTableEntry {
     /// A live value
     Value(Vec<u8>),
