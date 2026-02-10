@@ -31,4 +31,4 @@ mod recovery;
 pub use entry::{WalEntry, Operation, HEADER_SIZE};
 pub use writer::WalWriter;
 pub use reader::WalReader;
-pub use recovery::WalRecovery;
+pub use recovery::{WalRecovery, RecoveryResult};

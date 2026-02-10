@@ -76,6 +76,11 @@ impl WalReader {
         Ok(Some(entry))
     }
 
+    /// Check if the reader has reached the end of the file
+    pub fn is_at_eof(&self) -> bool {
+        self.position >= self.file_size
+    }
+
     /// Consume reader and return an iterator over all valid entries
     pub fn entries(self) -> WalIterator {
         WalIterator { reader: self }
