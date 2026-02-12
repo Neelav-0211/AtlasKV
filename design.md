@@ -187,34 +187,43 @@ enum MemTableEntry {
 
 **Purpose**: Persistent, sorted, immutable key-value storage.
 
-**File Format (V1 - Simple)**:
+**File Format (V1)**:
 ```
-┌────────────────────────────────────────┐
-│ Header (16 bytes)                      │
-│ ┌────────┬─────────┬─────────────────┐ │
-│ │Magic(4)│Version(2)│ Entry Count(8) │ │
-│ │"ATKV"  │  0x0001  │                │ │
-│ └────────┴─────────┴─────────────────┘ │
-├────────────────────────────────────────┤
-│ Data Block (variable)                  │
-│ ┌────────┬────────┬─────┬───────────┐ │
-│ │KeyLen(4)│ValLen(4)│ Key │  Value   │ │
-│ └────────┴────────┴─────┴───────────┘ │
-│ (ValLen = 0 for tombstones)           │
-│ ... repeated for each entry ...       │
-├────────────────────────────────────────┤
-│ Footer (16 bytes)                      │
-│ ┌───────────────────┬────────────────┐ │
-│ │ Min Key Offset(8) │   CRC32(4)     │ │
-│ └───────────────────┴────────────────┘ │
-└────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│ Header (14 bytes)                                       │
+│   Magic: "ATKV" (4) | Version: u16 (2) | Count: u64 (8) │
+├─────────────────────────────────────────────────────────┤
+│ Data Block (variable)                                   │
+│   [KeyLen: u32][ValLen: u32][Key][Value]                │
+│   ... repeated for each entry ...                       │
+│   (ValLen = u32::MAX indicates tombstone, no value)     │
+├─────────────────────────────────────────────────────────┤
+│ Index Block (variable)                                  │
+│   [KeyLen: u32][Offset: u64][Key]                       │
+│   ... repeated for each entry ...                       │
+├─────────────────────────────────────────────────────────┤
+│ Footer (16 bytes)                                       │
+│   IndexOffset: u64 (8) | DataCRC: u32 (4) | Padding (4) │
+└─────────────────────────────────────────────────────────┘
 ```
 
-**Lookup Strategy (V1)**:
-- Linear scan (simple, correct)
-- Future: Add index block for binary search
+**Lookup Strategy**:
+- On open: Load index block into in-memory `BTreeMap<Vec<u8>, u64>` (key → offset)
+- On get: O(log n) BTreeMap lookup, then single disk seek to read value
+- Range filtering: Use `min_key()`/`max_key()` to skip SSTables entirely
+
+**Tombstone Handling**:
+- `ValLen = u32::MAX` indicates a deleted key (tombstone)
+- No value bytes are stored for tombstones
+- Tombstones propagate during compaction until all older versions are removed
 
 **File Naming**: `sstable_{id}.dat` where id is monotonic
+
+**StorageManager**:
+- Maintains `Vec<SSTableReader>` ordered newest-first
+- `get()`: Search MemTable first, then SSTables newest→oldest
+- `flush()`: Create SSTable from MemTable entries, add reader to front
+- Range filtering: Skip SSTables where key is outside [min_key, max_key]
 
 ### 4. Engine
 
@@ -361,7 +370,7 @@ fn put(&self, key: &[u8], value: &[u8]) -> Result<()> {
 
 - [ ] **Compaction**: Merge multiple SSTables
 - [ ] **Bloom Filters**: Speed up negative lookups
-- [ ] **Block Index**: Binary search within SSTables
+- [x] **Block Index**: Binary search within SSTables (implemented via in-memory BTreeMap)
 - [ ] **Compression**: LZ4/Snappy for data blocks
 - [ ] **Range Queries**: Scan/iterate API
 - [ ] **Distribution**: Raft consensus for replication

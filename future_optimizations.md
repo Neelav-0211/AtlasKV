@@ -179,6 +179,55 @@ tokio::spawn(async move {
 
 ---
 
+## Storage Manager Optimizations
+
+### 4. Use VecDeque or Reverse Iteration for SSTable List
+**Status:** 🔖 TBD (To Be Decided)
+
+**Current State:**
+```rust
+// O(n) insert at front — shifts all existing elements
+self.sstables.insert(0, reader);
+```
+
+**Why It Exists:**
+- SSTables must be ordered newest → oldest for correct read semantics
+- Inserting at front keeps newest first
+- With <100 SSTables, the O(n) cost is negligible
+
+**When It Matters:**
+- No compaction + massive data = thousands of SSTables
+- Frequent flushes with tiny MemTable size
+- Each insert shifts all pointers in memory
+
+**Proposal A: Use `VecDeque`**
+```rust
+use std::collections::VecDeque;
+sstables: VecDeque<SSTableReader>,
+
+self.sstables.push_front(reader);  // O(1)
+```
+
+**Proposal B: Push to back, iterate in reverse**
+```rust
+self.sstables.push(reader);  // O(1) amortized
+
+// Read path:
+for reader in self.sstables.iter_mut().rev() { ... }
+```
+
+**Decision Criteria:**
+- If compaction is implemented, SSTable count stays low → not needed
+- If no compaction and expecting 1000+ SSTables → implement this
+- Benchmark flush latency with many SSTables
+
+**Estimated Impact:**
+- Flush: O(1) vs O(n) insertion
+- Read: No change (iteration either way)
+- Minimal real-world impact unless SSTable count is very high
+
+---
+
 ## Evaluation Process
 
 1. **Implement benchmarks** for WAL write operations

@@ -22,6 +22,12 @@
 //! │ └────────┴────────┴─────┴───────────┘ │
 //! │ ... (repeated for each entry)         │
 //! ├────────────────────────────────────────┤
+//! │ Index Block                            │
+//! │ ┌────────┬────────┬─────────────────┐ │
+//! │ │KeyLen  │ Offset │      Key        │ │
+//! │ └────────┴────────┴─────────────────┘ │
+//! │ ... (repeated for each entry)         │
+//! ├────────────────────────────────────────┤
 //! │ Footer                                 │
 //! │ ┌──────────────────┬─────────────────┐ │
 //! │ │ Index Offset     │    CRC32        │ │
@@ -32,5 +38,5 @@
 mod sstable;
 mod manager;
 
-pub use sstable::{SSTable, SSTableBuilder, SSTableReader};
+pub use sstable::{SSTable, SSTableBuilder, SSTableReader, SSTableIterator};
 pub use manager::StorageManager;
