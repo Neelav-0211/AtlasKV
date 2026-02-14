@@ -10,6 +10,9 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+use parking_lot::RwLock;
 
 use crate::error::Result;
 use crate::memtable::{MemTable, MemTableEntry};
@@ -18,16 +21,21 @@ use crate::AtlasError;
 use super::{SSTable, SSTableBuilder, SSTableReader};
 
 /// Manages the storage layer
+///
+/// ## Concurrency:
+/// - `sstables`: Protected by RwLock (many concurrent readers, exclusive writer)
+/// - `next_sstable_id`: Atomic counter (lock-free)
+/// - All methods use `&self` (no exclusive access needed)
 pub struct StorageManager {
     /// Directory where SSTables are stored
     data_dir: PathBuf,
 
     /// Open SSTable readers, ordered newest → oldest
-    /// We store readers (not just metadata) to keep indexes loaded in RAM
-    sstables: Vec<SSTableReader>,
+    /// Protected by RwLock - only mutable state shared across threads
+    sstables: RwLock<Vec<SSTableReader>>,
 
-    /// Next ID for creating new SSTables (monotonically increasing)
-    next_sstable_id: u64,
+    /// Next ID for creating new SSTables (atomic, lock-free)
+    next_sstable_id: AtomicU64,
 }
 
 impl StorageManager {
@@ -73,8 +81,8 @@ impl StorageManager {
 
         Ok(Self {
             data_dir: path.to_path_buf(),
-            sstables,
-            next_sstable_id: next_id,
+            sstables: RwLock::new(sstables),
+            next_sstable_id: AtomicU64::new(next_id),
         })
     }
 
@@ -83,9 +91,16 @@ impl StorageManager {
     /// Returns:
     /// - `Ok(Some(value))` — key found with value
     /// - `Ok(None)` — key not found, or found tombstone (deleted)
-    pub fn get(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+    ///
+    /// Note: Uses write lock because SSTableReader::get() needs &mut self
+    /// for file seeking. Future optimization: Make file handle use interior
+    /// mutability (Mutex<BufReader>) for true concurrent reads.
+    pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        // Need write lock because SSTableReader::get() mutates file position
+        let mut sstables = self.sstables.write();
+
         // Search SSTables newest → oldest
-        for reader in &mut self.sstables {
+        for reader in sstables.iter_mut() {
             // Skip SSTable if key is outside its range (O(1) check)
             if !reader.might_contain(key) {
                 continue;
@@ -108,7 +123,7 @@ impl StorageManager {
     ///
     /// Creates a new SSTable file from the MemTable's sorted entries,
     /// opens a reader for it, and adds it to the front of the list.
-    pub fn flush(&mut self, memtable: &MemTable) -> Result<SSTable> {
+    pub fn flush(&self, memtable: &MemTable) -> Result<SSTable> {
         // Skip if MemTable is empty
         if memtable.is_empty() {
             return Err(AtlasError::Storage(
@@ -116,9 +131,8 @@ impl StorageManager {
             ));
         }
 
-        // Generate new SSTable ID and path
-        let id = self.next_sstable_id;
-        self.next_sstable_id += 1;
+        // Generate new SSTable ID (atomic, lock-free)
+        let id = self.next_sstable_id.fetch_add(1, Ordering::SeqCst);
         let path = self.sstable_path(id);
 
         // Create builder and write entries (already sorted from BTreeMap)
@@ -134,15 +148,16 @@ impl StorageManager {
         // Open reader for the new SSTable
         let reader = SSTableReader::open(&path)?;
 
-        // Insert at front (newest first)
-        self.sstables.insert(0, reader);
+        // Acquire write lock and insert at front (newest first)
+        let mut sstables = self.sstables.write();
+        sstables.insert(0, reader);
 
         Ok(metadata)
     }
 
     /// Get the number of SSTables
     pub fn sstable_count(&self) -> usize {
-        self.sstables.len()
+        self.sstables.read().len()
     }
 
     /// Get the data directory path
@@ -152,7 +167,7 @@ impl StorageManager {
 
     /// Get the next SSTable ID (for testing/debugging)
     pub fn next_sstable_id(&self) -> u64 {
-        self.next_sstable_id
+        self.next_sstable_id.load(Ordering::SeqCst)
     }
 
     // =========================================================================
@@ -179,7 +194,7 @@ impl StorageManager {
 
     /// Compact SSTables (future - merges multiple SSTables)
     #[allow(dead_code)]
-    fn compact(&mut self) -> Result<()> {
+    fn compact(&self) -> Result<()> {
         todo!("Implement compaction in V2")
     }
 }

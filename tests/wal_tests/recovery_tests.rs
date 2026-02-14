@@ -35,19 +35,6 @@ fn write_entries_via_writer(path: &PathBuf, count: usize) {
     }
 }
 
-/// Write raw serialized entries directly to a file (for crafting corruption)
-fn write_raw_entries(path: &PathBuf, entries: &[WalEntry]) {
-    let mut file = File::create(path).unwrap();
-    for entry in entries {
-        let bytes = entry.serialize().unwrap();
-        file.write_all(&bytes).unwrap();
-    }
-    file.sync_all().unwrap();
-}
-
-// =============================================================================
-// Recover: Clean WAL Tests
-// =============================================================================
 
 #[test]
 fn test_recover_empty_file() {

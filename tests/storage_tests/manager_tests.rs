@@ -64,7 +64,7 @@ fn test_open_existing_directory() {
 
     // First open - create some SSTables
     {
-        let mut manager = StorageManager::open(&path).unwrap();
+        let manager = StorageManager::open(&path).unwrap();
 
         let memtable = create_memtable_with_entries(&[(b"k1", b"v1")]);
         manager.flush(&memtable).unwrap();
@@ -91,7 +91,7 @@ fn test_open_existing_directory() {
 #[test]
 fn test_flush_single_memtable() {
     let (_temp, path) = setup_temp_storage();
-    let mut manager = StorageManager::open(&path).unwrap();
+    let manager = StorageManager::open(&path).unwrap();
 
     let memtable = create_memtable_with_entries(&[
         (b"apple", b"red"),
@@ -108,7 +108,7 @@ fn test_flush_single_memtable() {
 #[test]
 fn test_flush_empty_memtable_fails() {
     let (_temp, path) = setup_temp_storage();
-    let mut manager = StorageManager::open(&path).unwrap();
+    let manager = StorageManager::open(&path).unwrap();
 
     let memtable = MemTable::new();
     let result = manager.flush(&memtable);
@@ -120,7 +120,7 @@ fn test_flush_empty_memtable_fails() {
 #[test]
 fn test_flush_multiple_memtables() {
     let (_temp, path) = setup_temp_storage();
-    let mut manager = StorageManager::open(&path).unwrap();
+    let manager = StorageManager::open(&path).unwrap();
 
     // Flush three MemTables
     for i in 0..3 {
@@ -136,7 +136,7 @@ fn test_flush_multiple_memtables() {
 #[test]
 fn test_flush_with_tombstones() {
     let (_temp, path) = setup_temp_storage();
-    let mut manager = StorageManager::open(&path).unwrap();
+    let manager = StorageManager::open(&path).unwrap();
 
     let memtable = MemTable::new();
     memtable.put(b"key1".to_vec(), b"value1".to_vec());
@@ -155,7 +155,7 @@ fn test_flush_with_tombstones() {
 #[test]
 fn test_get_from_single_sstable() {
     let (_temp, path) = setup_temp_storage();
-    let mut manager = StorageManager::open(&path).unwrap();
+    let manager = StorageManager::open(&path).unwrap();
 
     let memtable = create_memtable_with_entries(&[
         (b"key1", b"value1"),
@@ -171,7 +171,7 @@ fn test_get_from_single_sstable() {
 #[test]
 fn test_get_from_multiple_sstables() {
     let (_temp, path) = setup_temp_storage();
-    let mut manager = StorageManager::open(&path).unwrap();
+    let manager = StorageManager::open(&path).unwrap();
 
     // SSTable 1: k1, k2
     let memtable = create_memtable_with_entries(&[(b"k1", b"v1"), (b"k2", b"v2")]);
@@ -191,7 +191,7 @@ fn test_get_from_multiple_sstables() {
 #[test]
 fn test_get_newer_overrides_older() {
     let (_temp, path) = setup_temp_storage();
-    let mut manager = StorageManager::open(&path).unwrap();
+    let manager = StorageManager::open(&path).unwrap();
 
     // SSTable 1: key → "old"
     let memtable = create_memtable_with_entries(&[(b"key", b"old")]);
@@ -208,7 +208,7 @@ fn test_get_newer_overrides_older() {
 #[test]
 fn test_get_tombstone_hides_older_value() {
     let (_temp, path) = setup_temp_storage();
-    let mut manager = StorageManager::open(&path).unwrap();
+    let manager = StorageManager::open(&path).unwrap();
 
     // SSTable 1: key → "value"
     let memtable = create_memtable_with_entries(&[(b"key", b"value")]);
@@ -226,7 +226,7 @@ fn test_get_tombstone_hides_older_value() {
 #[test]
 fn test_get_not_found() {
     let (_temp, path) = setup_temp_storage();
-    let mut manager = StorageManager::open(&path).unwrap();
+    let manager = StorageManager::open(&path).unwrap();
 
     let memtable = create_memtable_with_entries(&[(b"exists", b"value")]);
     manager.flush(&memtable).unwrap();
@@ -245,7 +245,7 @@ fn test_persistence_across_restart() {
 
     // Write data and close
     {
-        let mut manager = StorageManager::open(&path).unwrap();
+        let manager = StorageManager::open(&path).unwrap();
         let memtable = create_memtable_with_entries(&[
             (b"key1", b"value1"),
             (b"key2", b"value2"),
@@ -255,7 +255,7 @@ fn test_persistence_across_restart() {
 
     // Reopen and verify data persisted
     {
-        let mut manager = StorageManager::open(&path).unwrap();
+        let manager = StorageManager::open(&path).unwrap();
         assert_eq!(manager.get(b"key1").unwrap(), Some(b"value1".to_vec()));
         assert_eq!(manager.get(b"key2").unwrap(), Some(b"value2".to_vec()));
     }
@@ -267,7 +267,7 @@ fn test_persistence_multiple_sstables() {
 
     // Create multiple SSTables
     {
-        let mut manager = StorageManager::open(&path).unwrap();
+        let manager = StorageManager::open(&path).unwrap();
 
         for i in 0..5 {
             let key = format!("key{}", i);
@@ -279,7 +279,7 @@ fn test_persistence_multiple_sstables() {
 
     // Reopen and verify
     {
-        let mut manager = StorageManager::open(&path).unwrap();
+        let manager = StorageManager::open(&path).unwrap();
         assert_eq!(manager.sstable_count(), 5);
 
         for i in 0..5 {
@@ -299,21 +299,21 @@ fn test_persistence_overwrites() {
 
     // Write old value
     {
-        let mut manager = StorageManager::open(&path).unwrap();
+        let manager = StorageManager::open(&path).unwrap();
         let memtable = create_memtable_with_entries(&[(b"key", b"old")]);
         manager.flush(&memtable).unwrap();
     }
 
     // Write new value
     {
-        let mut manager = StorageManager::open(&path).unwrap();
+        let manager = StorageManager::open(&path).unwrap();
         let memtable = create_memtable_with_entries(&[(b"key", b"new")]);
         manager.flush(&memtable).unwrap();
     }
 
     // Reopen and verify newest value
     {
-        let mut manager = StorageManager::open(&path).unwrap();
+        let manager = StorageManager::open(&path).unwrap();
         assert_eq!(manager.get(b"key").unwrap(), Some(b"new".to_vec()));
     }
 }
@@ -325,7 +325,7 @@ fn test_persistence_overwrites() {
 #[test]
 fn test_large_flush() {
     let (_temp, path) = setup_temp_storage();
-    let mut manager = StorageManager::open(&path).unwrap();
+    let manager = StorageManager::open(&path).unwrap();
 
     let memtable = MemTable::new();
     for i in 0..1000 {
@@ -350,7 +350,7 @@ fn test_sstable_ids_continue_after_restart() {
 
     // Create 3 SSTables
     {
-        let mut manager = StorageManager::open(&path).unwrap();
+        let manager = StorageManager::open(&path).unwrap();
         for _ in 0..3 {
             let memtable = create_memtable_with_entries(&[(b"k", b"v")]);
             manager.flush(&memtable).unwrap();
@@ -371,7 +371,7 @@ fn test_ignores_non_sstable_files() {
 
     // Create a valid SSTable
     {
-        let mut manager = StorageManager::open(&path).unwrap();
+        let manager = StorageManager::open(&path).unwrap();
         let memtable = create_memtable_with_entries(&[(b"k", b"v")]);
         manager.flush(&memtable).unwrap();
     }

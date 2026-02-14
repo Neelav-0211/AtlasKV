@@ -10,15 +10,16 @@ pub struct Config {
     // -------------------------------------------------------------------------
     // Storage Configuration
     // -------------------------------------------------------------------------
-    /// Directory for all data files
+    /// Root directory for all data files (WAL, SSTables, etc.)
+    /// Internal structure:
+    ///   {data_dir}/
+    ///     ├── wal.log          (write-ahead log)
+    ///     └── sstables/        (SSTable files)
     pub data_dir: PathBuf,
 
     // -------------------------------------------------------------------------
     // WAL Configuration
     // -------------------------------------------------------------------------
-    /// WAL file path (relative to data_dir)
-    pub wal_path: PathBuf,
-
     /// Sync strategy: how often to fsync WAL
     pub wal_sync_strategy: WalSyncStrategy,
 
@@ -58,7 +59,6 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             data_dir: PathBuf::from("./atlaskv_data"),
-            wal_path: PathBuf::from("wal.log"),
             wal_sync_strategy: WalSyncStrategy::EveryNEntries { count: 100 },
             memtable_size_limit: 64 * 1024 * 1024, // 64 MB
             listen_addr: "127.0.0.1:6379".to_string(),
@@ -83,8 +83,48 @@ pub struct ConfigBuilder {
 }
 
 impl ConfigBuilder {
-    // TODO: Implement builder methods
-    
+    /// Set the data directory (root for all storage)
+    pub fn data_dir(mut self, path: impl Into<PathBuf>) -> Self {
+        self.config.data_dir = path.into();
+        self
+    }
+
+    /// Set the WAL sync strategy
+    pub fn wal_sync_strategy(mut self, strategy: WalSyncStrategy) -> Self {
+        self.config.wal_sync_strategy = strategy;
+        self
+    }
+
+    /// Set the memtable size limit (in bytes)
+    pub fn memtable_size_limit(mut self, size: usize) -> Self {
+        self.config.memtable_size_limit = size;
+        self
+    }
+
+    /// Set the TCP listen address
+    pub fn listen_addr(mut self, addr: impl Into<String>) -> Self {
+        self.config.listen_addr = addr.into();
+        self
+    }
+
+    /// Set the maximum number of concurrent connections
+    pub fn max_connections(mut self, count: usize) -> Self {
+        self.config.max_connections = count;
+        self
+    }
+
+    /// Set the read timeout (in milliseconds)
+    pub fn read_timeout_ms(mut self, ms: u64) -> Self {
+        self.config.read_timeout_ms = ms;
+        self
+    }
+
+    /// Set the write timeout (in milliseconds)
+    pub fn write_timeout_ms(mut self, ms: u64) -> Self {
+        self.config.write_timeout_ms = ms;
+        self
+    }
+
     pub fn build(self) -> Config {
         self.config
     }

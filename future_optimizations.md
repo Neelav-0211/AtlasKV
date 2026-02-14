@@ -239,3 +239,63 @@ for reader in self.sstables.iter_mut().rev() { ... }
    - Performance gain vs. complexity increase
    - Feature trade-offs (e.g., losing timestamps)
    - V1 scope and priorities
+
+---
+
+## Concurrent SSTable Reads
+
+### Interior Mutability for SSTableReader
+**Status:** 🔖 TBD (To Be Decided)
+
+**Current State:**
+- `SSTableReader::get(&mut self)` requires mutable access because it seeks the file
+- `StorageManager` wraps `Vec<SSTableReader>` in `RwLock`
+- `get()` must acquire a **write lock** on the Vec even though it's a read operation
+- This means **only ONE storage read at a time**, no read concurrency
+
+**Proposal:**
+Use interior mutability for the file handle:
+
+```rust
+// Before:
+pub struct SSTableReader {
+    file: BufReader<File>,  // Requires &mut self to seek
+    // ...
+}
+
+// After:
+use parking_lot::Mutex;
+
+pub struct SSTableReader {
+    file: Mutex<BufReader<File>>,  // Interior mutability
+    // ...
+}
+
+impl SSTableReader {
+    pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        let mut file = self.file.lock();  // Short-lived lock
+        // ... seek and read ...
+    }
+}
+```
+
+**Benefits:**
+- `SSTableReader::get(&self)` - no longer needs mutable access
+- `StorageManager::get()` can use **read lock** on Vec
+- Multiple concurrent reads across different SSTables
+- Significant improvement for read-heavy workloads
+
+**Trade-offs:**
+- Extra lock acquisition per read (but lock is uncontended)
+- Slightly more complex code
+- `parking_lot::Mutex` is fast for uncontended cases
+
+**Decision Criteria:**
+- Benchmark read throughput with multiple threads
+- Profile lock contention under load
+- If reads are bottlenecked by storage lock, implement this
+
+**Estimated Impact:**
+- High impact for concurrent read workloads
+- Minimal impact for single-threaded use
+- Worth implementing if benchmarks show storage lock contention

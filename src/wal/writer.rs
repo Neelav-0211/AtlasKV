@@ -26,15 +26,13 @@ pub struct WalWriter {
 }
 
 impl WalWriter {
-    /// Open or create a WAL file for writing
-    ///
-    /// For V1: Truncates existing file (starts fresh)
+    /// Open or create a WAL file for writing (truncates - use for fresh start)
     pub fn open(path: &Path, sync_strategy: WalSyncStrategy) -> Result<Self> {
         // Step 1: Open file in write mode, create if doesn't exist, truncate to start fresh
         let file = OpenOptions::new()
             .create(true)      // Create file if it doesn't exist
             .write(true)       // Open for writing
-            .truncate(true)    // Clear existing content (V1 simplification)
+            .truncate(true)    // Clear existing content
             .open(path)?;
 
         // Step 2: Wrap in BufWriter for performance (batches writes in memory)
@@ -46,6 +44,29 @@ impl WalWriter {
         Ok(WalWriter {
             file,
             current_lsn,
+            sync_strategy,
+            uncommitted_count: 0,
+        })
+    }
+
+    /// Open WAL in append mode (for use after recovery)
+    ///
+    /// IMPORTANT: Call this after recovery instead of open() to preserve
+    /// the WAL until recovered data is flushed to disk.
+    pub fn open_append(path: &Path, sync_strategy: WalSyncStrategy, next_lsn: u64) -> Result<Self> {
+        // Step 1: Open file in append mode
+        let file = OpenOptions::new()
+            .create(true)      // Create file if it doesn't exist
+            .append(true)      // Append mode - don't truncate!
+            .open(path)?;
+
+        // Step 2: Wrap in BufWriter
+        let file = BufWriter::new(file);
+
+        // Step 3: Use provided LSN (continue from where recovery left off)
+        Ok(WalWriter {
+            file,
+            current_lsn: next_lsn,
             sync_strategy,
             uncommitted_count: 0,
         })
