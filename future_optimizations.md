@@ -299,3 +299,111 @@ impl SSTableReader {
 - High impact for concurrent read workloads
 - Minimal impact for single-threaded use
 - Worth implementing if benchmarks show storage lock contention
+---
+
+## Network I/O Optimizations
+
+### Async I/O with Tokio Runtime
+**Status:** 🔖 TBD (To Be Decided)
+
+**Current State:**
+- Blocking I/O with thread pool (one thread per active connection)
+- Workers block on `read_command()` waiting for client data
+- Thread pool size = CPU cores (e.g., 8 threads on 8-core CPU)
+- Good for < 10,000 concurrent connections
+
+**Architecture:**
+```
+1 Accept Thread + N Worker Threads = Handles M Connections
+                  (N = CPU cores)    (M = thousands)
+```
+
+**Proposal:**
+Use async I/O with Tokio for event-driven connection handling:
+
+```rust
+// Current: Blocking
+impl Connection {
+    pub fn handle(&mut self) -> Result<()> {
+        loop {
+            let cmd = read_command(&mut self.reader)?;  // Blocks thread
+            let response = self.engine.execute(cmd)?;
+            write_response(&mut self.writer, &response)?;
+        }
+    }
+}
+
+// Proposed: Async
+impl Connection {
+    pub async fn handle(&mut self) -> Result<()> {
+        loop {
+            let cmd = read_command(&mut self.reader).await?;  // Yields thread
+            let response = self.engine.execute(cmd)?;
+            write_response(&mut self.writer, &response).await?;
+        }
+    }
+}
+
+// Server spawns tasks instead of threads
+tokio::spawn(async move {
+    conn.handle().await
+});
+```
+
+**Benefits:**
+- Handles 10,000+ concurrent connections with minimal threads
+- Lower memory overhead (no stack per connection)
+- More efficient use of CPU resources
+- Better for high-concurrency scenarios
+
+**Trade-offs:**
+- Significant code complexity (async/await everywhere)
+- Requires `Engine` to be async-aware (or use `spawn_blocking`)
+- Harder to debug (async stack traces)
+- Learning curve for async Rust
+- More dependencies (tokio runtime)
+
+**Implementation Considerations:**
+
+**Option A: Full Async Stack**
+- Make `Engine` async (requires async WAL, storage, etc.)
+- Maximum performance but major refactor
+
+**Option B: Hybrid Approach**
+```rust
+tokio::spawn(async move {
+    loop {
+        let cmd = read_command(&mut reader).await?;  // Async I/O
+        let engine = engine.clone();
+        let response = tokio::task::spawn_blocking(move || {
+            engine.execute(cmd)  // Blocking Engine work
+        }).await?;
+        write_response(&mut writer, &response).await?;
+    }
+});
+```
+- Keep Engine blocking, only async for network I/O
+- Easier migration path
+
+**Decision Criteria:**
+- Benchmark max concurrent connections (blocking vs async)
+- Measure memory usage per connection
+- Evaluate if use case needs > 10k connections
+- Consider team familiarity with async Rust
+
+**Estimated Impact:**
+- **< 1,000 connections**: Minimal benefit, added complexity not worth it
+- **1,000 - 10,000 connections**: Moderate benefit, blocking still viable
+- **> 10,000 connections**: Significant benefit, async highly recommended
+
+**Connection Capacity Comparison:**
+```
+Blocking I/O:  ~1,000-5,000 connections (limited by thread overhead)
+Async I/O:     ~100,000+ connections (limited by file descriptors)
+```
+
+**Recommendation:**
+- V1: Keep simple blocking I/O with thread pool
+- V2: Add async support if benchmarks show connection limit issues
+- Consider hybrid approach to avoid refactoring Engine
+- Only implement if actual use case requires > 10k concurrent connections

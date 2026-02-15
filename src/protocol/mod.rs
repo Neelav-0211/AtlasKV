@@ -35,4 +35,8 @@ mod codec;
 
 pub use command::{Command, CommandType};
 pub use response::{Response, Status};
-pub use codec::{encode_command, decode_command, encode_response, decode_response};
+pub use codec::{
+    encode_command, decode_command, encode_response, decode_response,
+    read_command, write_command, read_response, write_response,
+    HEADER_SIZE, MAX_PAYLOAD_SIZE,
+};

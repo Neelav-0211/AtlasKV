@@ -63,8 +63,8 @@ impl Default for Config {
             memtable_size_limit: 64 * 1024 * 1024, // 64 MB
             listen_addr: "127.0.0.1:6379".to_string(),
             max_connections: 1024,
-            read_timeout_ms: 5000,
-            write_timeout_ms: 5000,
+            read_timeout_ms: 30000,   // Increased to 30 seconds
+            write_timeout_ms: 30000,  // Increased to 30 seconds
         }
     }
 }

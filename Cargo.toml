@@ -3,10 +3,10 @@ name = "atlaskv"
 version = "0.1.0"
 edition = "2021"
 authors = ["Your Name <you@example.com>"]
-description = "A high-performance, distributed key-value store with WAL, crash recovery, and TCP client support"
+description = "A high-performance, single-node key-value store with WAL, crash recovery, and TCP client support"
 license = "MIT"
 readme = "README.md"
-keywords = ["kv-store", "database", "distributed", "wal", "storage"]
+keywords = ["kv-store", "database", "lsm-tree", "wal", "storage"]
 categories = ["database", "data-structures"]
 
 [lib]
